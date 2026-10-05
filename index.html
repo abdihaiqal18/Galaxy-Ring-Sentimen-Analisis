@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Temporal Ring Analysis — Galaksi Sentimen</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#04050a;--pn:rgba(14,17,28,.9);--bd:#2a3042;--tx:#e8eaf2;--mut:#8a90a6}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+*{box-sizing:border-box}
+body{margin:0;height:100%;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+#stage{position:relative;flex:1;min-height:0}
+canvas{touch-action:none;position:absolute;inset:0;width:100%;height:100%;display:block}
+.top{position:absolute;top:10px;left:12px;right:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;pointer-events:none}
+.top>*{pointer-events:auto}
+.ttl{font-size:.95rem;font-weight:600;margin-right:6px}
+.ttl small{display:block;font-weight:400;color:var(--mut);font-size:.72rem}
+button,.btn,input{font:inherit;font-size:.78rem;color:var(--tx);background:var(--pn);border:1px solid var(--bd);border-radius:8px;padding:6px 10px;cursor:pointer}
+input{cursor:text;width:120px}
+select{font:inherit;font-size:.78rem;color:var(--tx);background:var(--pn);border:1px solid var(--bd);border-radius:8px;padding:6px 8px}
+input[type=date]{width:128px;color-scheme:dark}
+#cr{display:none;gap:4px;align-items:center;font-size:.78rem}#cr.on{display:flex}
+button.on{border-color:#7da2ff;color:#bcd0ff}
+.bar{display:flex;align-items:center;gap:14px;padding:10px 14px;border-top:1px solid #151827;font-size:.78rem;flex-wrap:wrap}
+.chip{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;background:none;border:0;padding:2px 4px;color:var(--tx)}
+.chip i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.chip.off{opacity:.3}
+.bar .sp{flex:1}
+#det{position:absolute;top:0;right:0;bottom:0;width:min(300px,86%);background:var(--pn);border-left:1px solid var(--bd);padding:14px;transform:translateX(100%);transition:transform .3s;overflow:auto;font-size:.85rem;backdrop-filter:blur(6px)}
+#det.open{transform:none}
+#det h3{margin:6px 0 8px;font-size:1rem;line-height:1.3}
+#det .x{float:right}
+.tag{display:inline-block;padding:2px 8px;border-radius:99px;font-size:.72rem;border:1px solid var(--bd)}
+.row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1b2030;color:var(--mut)}
+.row b{color:var(--tx);font-weight:500}
+#sp{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:5;padding:12px}
+#sp.open{display:flex}
+#sp .box{background:var(--pn);border:1px solid var(--bd);border-radius:14px;padding:18px;max-width:560px;width:100%;max-height:90%;overflow:auto;font-size:.85rem;line-height:1.5}
+#sp h3{margin:0 0 8px}#sp pre{background:#080a12;border:1px solid var(--bd);border-radius:8px;padding:10px;overflow:auto;font-size:.76rem;white-space:pre-wrap;word-break:break-all}
+#sp li{margin-bottom:3px}#sp .r{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+#acc{display:none;border-top:1px solid #151827;padding:6px 14px;gap:6px;flex-wrap:wrap;font-size:.75rem}
+.grad{height:8px;border-radius:4px;background:linear-gradient(90deg,#e5484d,#e8c07a,#37c98a);width:90px}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <div class="top">
+    <div class="ttl">Temporal Ring Analysis<small id="sub">Data contoh (demo) · topik Buton · 30 hari terakhir</small></div>
+    <input id="topic" value="Buton" aria-label="Nama topik">
+    <select id="rng" aria-label="Rentang waktu"><option value="7">7 hari</option><option value="30" selected>30 hari</option><option value="365">1 tahun</option><option value="custom">Pilih tanggal…</option></select>
+    <span id="cr"><input type="date" id="df" aria-label="Dari tanggal"><span>–</span><input type="date" id="dt" aria-label="Sampai tanggal"><button id="ap">Terapkan</button></span>
+    <button id="src" class="on">Sumber data</button><button id="mode">Kluster ⇄ Garis waktu</button><button id="ar" class="on">Putar otomatis</button>
+    <button id="col">Warna: Platform</button>
+    <label class="btn">Unggah data<input id="file" type="file" accept=".json,.csv,.txt" hidden></label>
+    <button id="zi" aria-label="Perbesar">＋</button><button id="zo" aria-label="Perkecil">－</button><button id="zr" aria-label="Atur ulang tampilan" title="Atur ulang">⟲</button>
+    <button id="fs" aria-label="Layar penuh">⛶</button>
+  </div>
+  <aside id="det"></aside>
+  <div id="sp"><div class="box"><h3>Sumber data: Buton</h3>
+    <p style="color:#8a90a6;margin:0 0 8px">Media daring diambil <b>otomatis saat halaman dibuka</b> lewat RSS 19 media, tetapi hanya jika halaman dijalankan dari <code>server.py</code> (browser memblokir pengambilan RSS langsung dari halaman web). Tanpa server, halaman menampilkan data contoh.</p>
+    <b>Media daring (RSS, otomatis)</b><ul><li>Panduan Rakyat, Terawang Sultra, Butonsatu, Takawa.id, Narasi Time, Cakrawala News, Kampurui, Satulis, Monitor Sultra, Fakta Sultra, Pena Aktual, Domain Publik, Kendari Pos, RRI, Republika, Detik Finance, Pawarta Jatim, Kompas, Rubrik Sultra — disaring kata kunci topik</li></ul>
+    <b>Media sosial (Apify, manual lewat collect.py)</b><ul><li><b>Instagram:</b> @infobutonraya, @infobuton_, @butonstories, @kendariinfo + #buton</li><li><b>Facebook:</b> Infobutonraya, pemkabbuton, AlvinAkawijayaPutra, ThePasarwajo, PanduanRakyat, DomainPublik.id</li><li><b>YouTube:</b> @DiskominfoButon, @MetroTV, @CNNIndonesia, @TvOneNews, @ArsalBahtiar + video bertag Buton</li></ul>
+    <b>Jalankan di terminal</b> <span style="color:#8a90a6">(satu folder: server.py, collect.py, index.html)</span><pre id="cmd"></pre>
+    <div class="r"><button id="cp">Salin perintah</button><label class="btn">Unggah data.json / CSV<input id="file2" type="file" accept=".json,.csv,.txt" hidden></label><button id="sx">Tutup</button></div></div></div>
+</div>
+<div class="bar" id="bar"></div>
+<script>
+
+const P=[{n:"Media daring",c:"#f2b25b",a:70,sp:.11},{n:"Instagram",c:"#b565f0",a:105,sp:-.08},{n:"Facebook",c:"#5b7cf2",a:140,sp:.06},{n:"YouTube",c:"#f2556b",a:92,sp:-.13},{n:"TikTok",c:"#37c9a6",a:125,sp:.09}];
+const SRC=[["Butonsatu","Takawa.id","Terawang Sultra","Monitor Sultra","Kendari Pos","Satulis","Panduan Rakyat","Fakta Sultra","Rubrik Sultra","RRI"],["@infobutonraya","@infobuton_","@butonstories","@kendariinfo"],["Infobutonraya","pemkabbuton","AlvinAkawijayaPutra","ThePasarwajo","PanduanRakyat","DomainPublik.id"],["DiskominfoButon","MetroTV","CNNIndonesia","TvOneNews","ArsalBahtiar"],["@buton.viral","@tiktok.buton"]];
+const TIT=["Festival budaya Buton kembali ramai dikunjungi wisatawan","Pengolahan aspal Buton jadi sorotan pembangunan jalan","Harga rumput laut turun, petani berharap harga membaik","Gelombang tinggi, nelayan diimbau tidak melaut sementara","Jalan penghubung antardesa rusak, warga berharap perbaikan","Posyandu aktif digelar serentak di sejumlah kecamatan","Pasar murah bantu tekan harga kebutuhan pokok","Pantai tersembunyi Buton jadi favorit wisata akhir pekan","Kuliner khas kasuami diburu pengunjung","Listrik padam bergilir, warga di beberapa desa mengeluh","Banjir kecil rendam permukiman pesisir semalam","Pelatihan UMKM tenun dan kerajinan lokal dibuka","Benteng bersejarah jadi lokasi wisata edukasi pelajar","Pelabuhan ramai jelang libur panjang, penumpang meningkat","Layanan kesehatan keliling menjangkau desa terpencil"];
+const cv=document.getElementById("cv"),g=cv.getContext("2d"),$=id=>document.getElementById(id);
+let W,H,dpr,parts=[],D=30,dates=[],on=P.map(()=>true),colMode="p",m=0,mt=0,t0=performance.now(),hov=-1,sel=-1,selK=-1,counts=[],labels=[],auto=true,moved=0;
+let yaw=.3,pit=.5,dist=1700,tx=0,ty=0,tz=0,yawT=.3,pitT=.5,distT=520,ttx=0,tty=0,ttz=0,shift=0;
+const offSrc=new Set(),vis=p=>on[p.p]&&!offSrc.has(p.src),xs=[],ys=[],us=[],ks=[],wx=[],wy=[],wz=[],PSX=[],PSY=[],PSK=[],PRD=[],ptrs=new Map(),INC=[.2,-.35,.5,-.15,.3];
+let cY,sY,cP,sP,F,OX,OY,PX,PY,PK,PD;
+const R=330,ease=x=>x*x*(3-2*x),cl=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+function rs(){dpr=devicePixelRatio||1;W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;g.setTransform(dpr,0,0,dpr,0,0)}
+addEventListener("resize",rs);
+function sCol(v){const k=(v+1)/2,a=[229,72,77],b=[232,192,122],c=[55,201,138],[p,q,f]=k<.5?[a,b,k*2]:[b,c,(k-.5)*2];return`rgb(${p.map((x,i)=>Math.round(x+(q[i]-x)*f)).join(",")})`}
+function fmt(d){return d.toLocaleDateString("id-ID",{day:"numeric",month:"short"})}
+function build(rows){
+  parts=rows.map(r=>{const z=Math.random()*2-1,a=Math.random()*6.283,q=Math.sqrt(1-z*z);
+    return{...r,sc:sCol(r.s),dl:Math.random()*.5,jr:Math.random(),hj:Math.random()-.5,ux:q*Math.cos(a),uy:z,uz:q*Math.sin(a),or:16+62*Math.sqrt(Math.random()),os:(.15+Math.random()*.4)*(Math.random()<.5?-1:1)}});
+  counts=P.map((_,k)=>parts.filter(p=>p.p===k).length);
+  labels=[];const seen={};parts.forEach((p,i)=>{const key=p.p+"_"+Math.floor(p.d/3);if(!seen[key]&&Math.random()<.5&&labels.length<16){seen[key]=1;labels.push(i)}});
+}
+function sim(){
+  const end=new Date();end.setHours(0,0,0,0);dates=[...Array(D)].map((_,i)=>new Date(end.getTime()-(D-1-i)*864e5));
+  const w=[.42,.14,.12,.1,.22],rows=[],base=[.05,.25,-.05,-.15,.2];
+  for(let d=0;d<D;d++){const n=Math.round(14+8*Math.sin(d/3)+(d>=17&&d<22?40*Math.exp(-(d-17)/2):0)+Math.random()*8);
+    for(let i=0;i<n;i++){let r=Math.random(),k=0;while(r>w[k]){r-=w[k];k++}
+      let s=base[k]+(Math.random()-.5)*.8-(d>=17&&d<24?.5*Math.exp(-(d-17)/3):0);
+      rows.push({p:k,d,s:cl(s,-1,1),src:SRC[k][Math.floor(Math.random()*SRC[k].length)],tit:TIT[Math.floor(Math.random()*TIT.length)]})}}
+  build(rows);
+}
+const esc=t=>String(t??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pidx=n=>{const i=P.findIndex(p=>p.n.toLowerCase()===String(n||"").trim().toLowerCase());return i<0?0:i};
+function ingest(rows){
+  rows=rows.filter(r=>!isNaN(r.t)&&!isNaN(r.s));
+  if(!rows.length)return alert("Data tidak terbaca. Gunakan data.json dari collect.py atau CSV: tanggal,platform,sentimen,judul,sumber,url");
+  const t1=RANGE?RANGE[1]:Math.max(...rows.map(r=>r.t)),t0=RANGE?RANGE[0]:Math.min(...rows.map(r=>r.t));D=cl(Math.round((t1-t0)/864e5)+1,2,60);
+  dates=[...Array(D)].map((_,i)=>new Date(t0+i*(t1-t0)/Math.max(1,D-1)));
+  rows.forEach(r=>r.d=cl(Math.round((r.t-t0)/Math.max(1,(t1-t0))*(D-1)),0,D-1));const st=Math.ceil(rows.length/2000);build(st>1?rows.filter((_,i)=>i%st===0):rows);clearSel();
+  accRow();$("sub").textContent="Data nyata · "+rows.length+" publikasi · "+fmt(new Date(t0))+" – "+fmt(new Date(t1));
+}
+function load(txt,name){
+  let rows=[];
+  if(/\.json$/i.test(name)||txt.trim()[0]==="{"||txt.trim()[0]==="["){
+    let j;try{j=JSON.parse(txt)}catch(e){return alert("JSON tidak valid")}
+    if(j.topik)$("topic").value=j.topik;
+    rows=(Array.isArray(j)?j:j.data||[]).map(r=>({t:new Date(r.tanggal),p:pidx(r.platform),s:cl(parseFloat(r.sentimen),-1,1),tit:r.judul||"(tanpa judul)",src:r.sumber||"",url:r.url||""}));
+  }else rows=txt.trim().split(/\r?\n/).map(l=>l.split(/[,;\t]/)).map(c=>({t:new Date((c[0]||"").trim().replace(" ","T")),p:pidx(c[1]),s:cl(parseFloat(c[2]),-1,1),tit:(c[3]||"(tanpa judul)").trim(),src:(c[4]||"").trim(),url:(c[5]||"").trim()}));
+  ingest(rows);
+}
+const aOf=d=>-Math.PI*.5+.18*Math.PI+d/Math.max(1,D-1)*1.64*Math.PI;
+function ppos(k,t){const a=t*P[k].sp+k*1.3,A=P[k].a;return[Math.cos(a)*A,Math.sin(a)*A*Math.sin(INC[k]),Math.sin(a)*A*Math.cos(INC[k])]}
+function pr(x,y,z){x-=tx;y-=ty;z-=tz;const x1=x*cY-z*sY,z1=x*sY+z*cY,y2=y*cP+z1*sP,z2=-y*sP+z1*cP,d=dist+z2;PK=d>30?F/d:0;PX=OX+x1*PK;PY=OY-y2*PK;PD=d}
+function poly(fn,n){let go=false;g.beginPath();for(let j=0;j<=n;j++){const q=fn(j/n*6.2832);pr(q[0],q[1],q[2]);if(!PK){go=false;continue}go?g.lineTo(PX,PY):g.moveTo(PX,PY);go=true}g.stroke()}
+function frame(now){
+  const t=(now-t0)/1000;m+=(mt-m)*.025;if(Math.abs(mt-m)<.001)m=mt;
+  if(auto&&!ptrs.size&&sel<0&&selK<0)yawT+=.0006;
+  const pls=P.map((_,k)=>ppos(k,t));
+  if(sel>=0&&wx[sel]!==undefined){ttx=wx[sel];tty=wy[sel];ttz=wz[sel]}else if(selK>=0){[ttx,tty,ttz]=pls[selK]}
+  const e=.1;yaw+=(yawT-yaw)*e;pit+=(pitT-pit)*e;dist+=(distT-dist)*e;tx+=(ttx-tx)*e;ty+=(tty-ty)*e;tz+=(ttz-tz)*e;
+  shift+=(((sel>=0||selK>=0)&&W>700?150:0)-shift)*.1;
+  cY=Math.cos(yaw);sY=Math.sin(yaw);cP=Math.cos(pit);sP=Math.sin(pit);F=Math.min(W,H)*1.15;OX=W/2-shift;OY=H/2+10;
+  g.clearRect(0,0,W,H);g.globalCompositeOperation="source-over";g.lineWidth=1;
+  g.strokeStyle="rgba(120,140,200,.15)";
+  P.forEach((p,k)=>poly(a=>[Math.cos(a)*p.a,Math.sin(a)*p.a*Math.sin(INC[k]),Math.sin(a)*p.a*Math.cos(INC[k])],72));
+  if(m>.05){g.globalAlpha=m;g.setLineDash([2,6]);g.strokeStyle="rgba(150,170,230,.4)";poly(a=>[Math.cos(a)*R*.62,0,Math.sin(a)*R*.62],96);g.setLineDash([]);
+    g.fillStyle="#9aa3c4";g.font="11px ui-monospace,Menlo,monospace";g.textAlign="center";
+    for(let d=0;d<D;d+=Math.max(1,Math.round(D/15))){const a=aOf(d);pr(Math.cos(a)*R*.62,0,Math.sin(a)*R*.62);if(PK)g.fillText(fmt(dates[d]),PX,PY)}g.globalAlpha=1}
+  pls.forEach((q,k)=>{pr(q[0],q[1],q[2]);PSX[k]=PX;PSY[k]=PY;PSK[k]=PK});
+  g.globalCompositeOperation="lighter";
+  pls.forEach((q,k)=>{if(!on[k]||!PSK[k])return;const r=100*(1+(1-m)*.6)*PSK[k],gr=g.createRadialGradient(PSX[k],PSY[k],0,PSX[k],PSY[k],r);
+    gr.addColorStop(0,P[k].c+"66");gr.addColorStop(.5,P[k].c+"22");gr.addColorStop(1,P[k].c+"00");g.fillStyle=gr;g.beginPath();g.arc(PSX[k],PSY[k],r,0,6.283);g.fill()});
+  const sc=colMode==="p";
+  parts.forEach((p,i)=>{
+    const q=pls[p.p],u=ease(cl(m*1.5-p.dl)),oa=p.os*t,c=Math.cos(oa),s=Math.sin(oa),
+      ax=q[0]+(p.ux*c-p.uz*s)*p.or,ay=q[1]+p.uy*p.or,az=q[2]+(p.ux*s+p.uz*c)*p.or,
+      a=aOf(p.d)+(p.jr-.5)*.05,rad=R*(.75+p.jr*.5),bx=Math.cos(a)*rad,by=(p.p-2)*45+p.hj*230,bz=Math.sin(a)*rad,
+      x=ax+(bx-ax)*u,y=ay+(by-ay)*u+Math.sin(u*Math.PI)*60*p.hj,z=az+(bz-az)*u;
+    wx[i]=x;wy[i]=y;wz[i]=z;pr(x,y,z);xs[i]=PX;ys[i]=PY;us[i]=u;ks[i]=PK;
+    if(!vis(p)||!PK||PX<-20||PX>W+20||PY<-20||PY>H+20)return;
+    const col=sc?P[p.p].c:p.sc;
+    if(u>.02&&u<.999&&i%3===0&&PSK[p.p]){g.strokeStyle=col;g.globalAlpha=.12;g.beginPath();g.moveTo(PSX[p.p],PSY[p.p]);g.lineTo(PX,PY);g.stroke()}
+    g.fillStyle=col;g.globalAlpha=(i===hov||i===sel)?1:cl(1.15-(PD-dist)/700,.2,.9);
+    g.beginPath();g.arc(PX,PY,cl(PK*(1.1+p.jr*.9)*.9,.7,5)*(i===sel?2.2:1),0,6.283);g.fill()});
+  g.globalAlpha=1;g.globalCompositeOperation="source-over";
+  pr(0,0,0);const SX=PX,SY=PY,SK=PK;
+  if(SK){const st=g.createRadialGradient(SX,SY,0,SX,SY,24*SK);st.addColorStop(0,"#fff6dc");st.addColorStop(.3,"#ffc66b");st.addColorStop(1,"rgba(255,170,60,0)");g.fillStyle=st;g.beginPath();g.arc(SX,SY,24*SK,0,6.283);g.fill()}
+  [...P.keys()].sort((a,b)=>PSK[a]-PSK[b]).forEach(k=>{if(!on[k]||!PSK[k])return;const X=PSX[k],Y=PSY[k],r=(7+Math.sqrt(counts[k])*.25)*PSK[k];PRD[k]=r;
+    const b=g.createRadialGradient(X-r*.3,Y-r*.3,r*.1,X,Y,r);b.addColorStop(0,"#fff");b.addColorStop(.25,P[k].c);b.addColorStop(1,"#10131f");g.fillStyle=b;g.beginPath();g.arc(X,Y,r,0,6.283);g.fill();
+    if(k===selK){g.strokeStyle="#fff";g.lineWidth=1.5;g.beginPath();g.arc(X,Y,r+5,0,6.283);g.stroke();g.lineWidth=1}
+    g.fillStyle=P[k].c;g.font="11px system-ui";g.textAlign="left";g.fillText(P[k].n,X+r+4,Y-2);g.fillStyle="#aab";g.fillText(counts[k],X+r+4,Y+11)});
+  if(SK){const tw=100,ty2=SY+22*SK+8;g.fillStyle="rgba(8,10,18,.88)";g.fillRect(SX-tw/2,ty2,tw,38);g.textAlign="center";g.fillStyle="#fff";g.font="600 13px system-ui";g.fillText($("topic").value||"Topik",SX,ty2+16);
+    g.fillStyle="#9aa3c4";g.font="10px system-ui";g.fillText(parts.filter(vis).length+" publikasi",SX,ty2+31)}
+  if(sel>=0&&xs[sel]!==undefined){const pu=1+.25*Math.sin(t*5);g.strokeStyle="#fff";g.beginPath();g.arc(xs[sel],ys[sel],12*pu,0,6.283);g.stroke()}
+  g.textAlign="left";g.font="10px system-ui";
+  const idx=m>.55?labels.filter(i=>vis(parts[i])&&us[i]>.95&&ks[i]>.6&&ks[i]):[];if(hov>=0&&!idx.includes(hov))idx.push(hov);if(sel>=0&&!idx.includes(sel))idx.push(sel);
+  idx.forEach(i=>{const p=parts[i],x=xs[i]+6,y=ys[i]-6,tt=p.tit.length>46?p.tit.slice(0,44)+"…":p.tit,w=Math.max(g.measureText(tt).width,g.measureText(p.src).width)+12,X=Math.min(x,W-w-4);
+    g.fillStyle="rgba(8,10,18,.82)";g.fillRect(X,y-24,w,30);g.fillStyle=P[p.p].c;g.fillText(p.src,X+6,y-12);g.fillStyle="#d6d9e6";g.fillText(tt,X+6,y+1)});
+  requestAnimationFrame(frame);
+}
+function near(e){const r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+  for(let k=0;k<P.length;k++)if(on[k]&&PSK[k]&&(PSX[k]-x)**2+(PSY[k]-y)**2<((PRD[k]||8)+6)**2)return{t:"k",i:k};
+  let b=-1,bd=120;for(let i=0;i<parts.length;i++){if(!vis(parts[i])||!ks[i])continue;const d=(xs[i]-x)**2+(ys[i]-y)**2;if(d<bd){bd=d;b=i}}
+  return b>=0?{t:"p",i:b}:null}
+const rel=e=>{const r=cv.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}};
+cv.addEventListener("wheel",e=>{e.preventDefault();distT=cl(distT*Math.exp(e.deltaY*(e.ctrlKey?.01:.0015)),40,1800)},{passive:false});
+cv.addEventListener("contextmenu",e=>e.preventDefault());
+cv.addEventListener("pointerdown",e=>{const q=rel(e);q.pan=e.button===2||e.shiftKey;ptrs.set(e.pointerId,q);moved=0;cv.setPointerCapture(e.pointerId);hov=-1});
+cv.addEventListener("pointermove",e=>{
+  const q=rel(e),o=ptrs.get(e.pointerId);
+  if(!o){const h=near(e);hov=h&&h.t==="p"?h.i:-1;cv.style.cursor=h?"pointer":"grab";return}
+  q.pan=o.pan;
+  if(ptrs.size===1){const dx=q.x-o.x,dy=q.y-o.y;moved+=Math.abs(dx)+Math.abs(dy);cv.style.cursor="grabbing";
+    if(o.pan&&sel<0&&selK<0){const k=dist/F;ttx+=(-cY*dx+sP*sY*dy)*k;tty+=cP*dy*k;ttz+=(sY*dx+sP*cY*dy)*k}
+    else{yawT+=dx*.006;pitT=cl(pitT+dy*.006,-1.45,1.45)}}
+  else if(ptrs.size===2){const ot=[...ptrs.entries()].find(([k])=>k!==e.pointerId)[1],d0=Math.hypot(o.x-ot.x,o.y-ot.y),d1=Math.hypot(q.x-ot.x,q.y-ot.y);if(d1>0)distT=cl(distT*d0/d1,40,1800);moved+=10}
+  ptrs.set(e.pointerId,q)});
+const up=e=>{ptrs.delete(e.pointerId);cv.style.cursor="grab"};
+cv.addEventListener("pointerup",up);cv.addEventListener("pointercancel",up);
+cv.addEventListener("click",e=>{if(moved>5)return;const h=near(e);if(!h){clearSel();return}h.t==="k"?selPlanet(h.i):selPoint(h.i)});
+cv.addEventListener("dblclick",e=>{const h=near(e);if(h&&h.t==="p")distT=70});
+function selPoint(i){sel=i;selK=-1;distT=150;detail(i)}
+function selPlanet(k){selK=k;sel=-1;distT=300;const ps=parts.filter(p=>p.p===k),av=ps.reduce((a,p)=>a+p.s,0)/(ps.length||1),
+  n=ps.filter(p=>p.s<-.15).length,po=ps.filter(p=>p.s>.15).length,d=$("det");
+  d.innerHTML=`<button class="x" onclick="clearSel()">✕</button><span class="tag" style="color:${P[k].c};border-color:${P[k].c}">Platform</span><h3>${P[k].n}</h3>
+  <div class="row"><span>Publikasi</span><b>${ps.length}</b></div><div class="row"><span>Rata-rata sentimen</span><b style="color:${sCol(av)}">${av>=0?"+":""}${av.toFixed(2)}</b></div>
+  <div class="row"><span>Positif / Netral / Negatif</span><b>${po} / ${ps.length-po-n} / ${n}</b></div>
+  <p style="color:#8a90a6;font-size:.78rem">Judul terbaru:</p>${ps.slice(-4).reverse().map(p=>`<div class="row" style="display:block;color:#d6d9e6">${esc(p.tit)}</div>`).join("")}`;d.classList.add("open")}
+function accRow(){offSrc.clear()}
+function clearSel(){sel=-1;selK=-1;ttx=tty=ttz=0;distT=mt>.5?880:520;$("det").classList.remove("open")}
+function detail(i){const p=parts[i],d=$("det"),lab=p.s>.15?"positif":p.s<-.15?"negatif":"netral";
+  d.innerHTML=`<button class="x" onclick="clearSel()">✕</button><span class="tag" style="color:${P[p.p].c};border-color:${P[p.p].c}">${P[p.p].n}</span><h3>${esc(p.tit)}</h3>
+  <div class="row"><span>Sumber</span><b>${esc(p.src)}</b></div><div class="row"><span>Tanggal</span><b>${dates[p.d]?fmt(dates[p.d]):"-"}</b></div>
+  <div class="row"><span>Sentimen</span><b style="color:${sCol(p.s)}">${p.s>=0?"+":""}${p.s.toFixed(2)} (${lab})</b></div>
+  <div class="row"><span>Skala</span><div class="grad"></div></div>${/^https?:\/\//.test(p.url||"")?`<p><a style="color:#9bb8ff" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">Buka sumber ↗</a></p>`:""}`;d.classList.add("open")}
+const cmdT=()=>{const k=($("topic").value||"Buton");return `# 1) RSS media daring otomatis saat dibuka -> http://localhost:8000\npython3 server.py\n\n# 2) Media sosial (Apify), lalu unggah data.json lewat tombol di bawah\nexport APIFY_TOKEN="apify_api_xxx"\npython3 collect.py --keyword ${k} --filter '${k.toLowerCase()}|baubau' --days 30`};
+$("src").onclick=()=>{$("cmd").textContent=cmdT();$("sp").classList.add("open")};$("sx").onclick=()=>$("sp").classList.remove("open");
+$("sp").onclick=e=>{if(e.target.id==="sp")$("sp").classList.remove("open")};
+$("cp").onclick=e=>{navigator.clipboard&&navigator.clipboard.writeText(cmdT()).then(()=>e.target.textContent="Tersalin ✓").catch(()=>{})};
+$("file2").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{load(r.result,f.name);$("sp").classList.remove("open")};r.readAsText(f)};
+let RANGE=null,ctl=null,seq=0;
+const dstr=d=>d.toISOString().slice(0,10);
+async function go(){
+  const v=$("rng").value,kw=$("topic").value||"Buton",my=++seq;let qs="keyword="+encodeURIComponent(kw),a,b=new Date();
+  if(v==="custom"){if(!$("df").value||!$("dt").value||$("df").value>$("dt").value){$("sub").textContent="Pilih tanggal awal dan akhir yang valid";return}
+    qs+="&from="+$("df").value+"&to="+$("dt").value;a=new Date($("df").value+"T00:00:00");b=new Date($("dt").value+"T23:59:59")}
+  else{qs+="&days="+v;a=new Date(b.getTime()-(+v-1)*864e5);a.setHours(0,0,0,0)}
+  if(ctl)ctl.abort();ctl=new AbortController();const tm=setTimeout(()=>ctl.abort(),240000);
+  $("sub").textContent="Mengambil RSS dari 19 media daring… (bisa 10–90 detik)";
+  try{const r=await fetch("/api/rss?"+qs,{signal:ctl.signal});if(!r.ok)throw new Error("http");const txt=await r.text(),j=JSON.parse(txt);if(my!==seq)return;
+    if(!j.data||!j.data.length){$("sub").textContent=`RSS ${j.ok}/${j.total} media terjangkau · tidak ada publikasi "${kw}" pada ${fmt(a)} – ${fmt(b)}`;return}
+    RANGE=[a.getTime(),b.getTime()];load(txt,"api.json");RANGE=null;
+    $("sub").textContent=`RSS ${j.ok}/${j.total} media · ${j.data.length} publikasi · ${fmt(a)} – ${fmt(b)}`+(j.gagal&&j.gagal.length?` · gagal: ${j.gagal.join(", ")}`:"")}
+  catch(e){RANGE=null;if(my!==seq)return;$("sub").textContent=e.name==="AbortError"?"RSS terlalu lama merespons, coba rentang lebih pendek":"Mode demo · RSS langsung butuh server.py (lihat \"Sumber data\")"}
+  finally{clearTimeout(tm)}}
+$("rng").onchange=()=>{const c=$("rng").value==="custom";$("cr").classList.toggle("on",c);if(!c)go()};
+$("ap").onclick=go;$("topic").onchange=go;
+{const n=new Date();$("dt").value=dstr(n);$("df").value=dstr(new Date(n.getTime()-29*864e5))}
+$("mode").onclick=()=>{mt=mt>.5?0:1;if(sel<0&&selK<0)distT=mt>.5?880:520};
+$("ar").onclick=e=>{auto=!auto;e.target.classList.toggle("on",auto)};
+$("col").onclick=e=>{colMode=colMode==="p"?"s":"p";e.target.textContent="Warna: "+(colMode==="p"?"Platform":"Sentimen");e.target.classList.toggle("on",colMode==="s")};
+$("zi").onclick=()=>distT=cl(distT/1.4,40,1800);$("zo").onclick=()=>distT=cl(distT*1.4,40,1800);$("zr").onclick=()=>{yawT=.3;pitT=.5;clearSel()};
+$("fs").onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();
+$("file").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>load(r.result,f.name);r.readAsText(f)};
+$("bar").innerHTML=P.map((p,k)=>`<button class="chip" data-k="${k}"><i style="background:${p.c}"></i>${p.n}</button>`).join("")+`<span class="sp"></span><span style="color:#8a90a6">Seret = putar 3D · Shift/klik kanan + seret = geser · scroll = zoom · klik titik atau planet = fokus</span>`;
+document.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{const k=+c.dataset.k;on[k]=!on[k];c.classList.toggle("off",!on[k])});
+rs();sim();accRow();go();setTimeout(()=>mt=1,700);setTimeout(()=>{if(sel<0&&selK<0)distT=880},700);requestAnimationFrame(frame);
+</script>
+</body>
+</html>
